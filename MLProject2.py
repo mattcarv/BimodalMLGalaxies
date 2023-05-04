@@ -59,37 +59,55 @@ ax.invert_yaxis()
 plt.clf()
 
 
-# df = df[df.Mcz<0.8]
-# df = df[df.Mcz>0.7]
+df = df[df.Mcz<0.8]
+df = df[df.Mcz>0.7]
 
 plt.figure(figsize=(12, 10))
 ax = sns.scatterplot(df.BbMAG, (df.UbMAG-df.BbMAG))
 plt.title('Blue Mag vs Ultra-Blue')
 plt.clf()
 
+# reduce the dimensionality of the data
+
+from sklearn.decomposition import PCA
+
+pca = PCA(n_components=2)
+pca.fit(df)
+
+print("Explained variance ratio: ")
+print(pca.explained_variance_ratio_)
+
+print('PCA components: ')
+print(pca.components_)
+
+
+df_pca = pca.transform(df)
+
 # test the bimodality here
 
-df_bi = pd.DataFrame().assign(blue=df['BbMAG'], ultramb=(df['UbMAG']-df['BbMAG']))
+# df_bi = pd.DataFrame().assign(blue=df['BbMAG'], ultramb=(df['UbMAG']-df['BbMAG']))
 
-from sklearn.cluster import SpectralClustering
+# from sklearn.cluster import SpectralClustering
 
-# sc = SpectralClustering(n_clusters=2, affinity='nearest_neighbors', 
-#                         assign_labels='kmeans', n_init=100)
-# label = sc.fit_predict(df_bi)
+# # sc = SpectralClustering(n_clusters=2, affinity='nearest_neighbors', 
+# #                         assign_labels='kmeans', n_init=100)
+# # label = sc.fit_predict(df_bi)
+
+plt.scatter(df_pca[:,0], df_pca[:,1], s=15, linewidth=0)
+plt.xlabel('PCA 1')
+plt.ylabel('PCA 2')
+plt.show()
+
+# from sklearn import metrics
+
+# # print(f"Silhouette Coefficient: {metrics.silhouette_score(df_bi, label):.3f}")
+
+# from sklearn.cluster import KMeans
+
+# km = KMeans(n_clusters=2, init='random', max_iter=1000)
+# label = km.fit_predict(df_bi)
 
 # plt.scatter(df_bi['blue'], df_bi['ultramb'], s=15, linewidth=0, c=label)
 # plt.show()
 
-from sklearn import metrics
-
 # print(f"Silhouette Coefficient: {metrics.silhouette_score(df_bi, label):.3f}")
-
-from sklearn.cluster import KMeans
-
-km = KMeans(n_clusters=2, init='random', max_iter=1000)
-label = km.fit_predict(df_bi)
-
-plt.scatter(df_bi['blue'], df_bi['ultramb'], s=15, linewidth=0, c=label)
-plt.show()
-
-print(f"Silhouette Coefficient: {metrics.silhouette_score(df_bi, label):.3f}")

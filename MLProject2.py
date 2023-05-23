@@ -10,7 +10,6 @@ df = pd.read_csv('/home/mdocarm/Downloads/COMBO17.csv')
 
 # Drop null rows
 df = df.dropna()
-df.shape
 
 # Drop error columns
 
@@ -21,93 +20,141 @@ for f in df.columns:
         error.append(f)
         
 df = df.drop(error, axis=1)
+df = df.drop('Nr', axis=1)
 
-# Create a correlation matrix
+# Removing outliers
 
-new_df = df.drop('Nr', axis=1)
+# sns.boxenplot(df.Rmag)
+# sns.boxenplot(df.chi2red)
+# sns.boxenplot(df.ApDRmag)
+# sns.boxenplot(df.Mcz)
 
-corr = df.corr()
-mask = np.triu(np.ones_like(corr, dtype=np.bool))
-fig, ax = plt.subplots(figsize=(25, 18))
-sns.heatmap(corr, annot=True, cmap='Blues', linewidth=0.5, mask=mask)
-plt.title('Correlation matrix')
+
+df = df[df.Rmag>19]
+df = df[df.chi2red<5]
+df = df[df.ApDRmag>-2.5]
+df = df[df.Mcz<1.2]
+
+df = pd.DataFrame().assign(Rmag=df['Rmag'], ApDRmag=df['ApDRmag'], Mcz=df['Mcz'],
+                           chi2red=df['chi2red'])
+
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = StandardScaler()
+minmax = MinMaxScaler()
+
+df_scaler = scaler.fit_transform(df)
+df_minmax = minmax.fit_transform(df)
+
+
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import DBSCAN
+import scipy.cluster.hierarchy as shc
+
+
+def agglomerative_cluster(dataset):
+  silhouette_coefficient = []   #list to silhouette score
+  for linkage in ['ward', 'complete', 'average', 'single']:   # the distance measuremtn will be based in
+    for number in range(2,11):
+      agglomerative = AgglomerativeClustering(n_clusters= number, affinity='euclidean', linkage = linkage) #agglomerative model
+      agglomerative.fit(dataset)    #fitting the model
+      score = silhouette_score(dataset, agglomerative.labels_)
+      silhouette_coefficient.append(score)
+
+  print(f'ward: {max(silhouette_coefficient[:9])}, {len(silhouette_coefficient[:9])}')
+  print(f'maximum: {max(silhouette_coefficient[9:18])}, {len(silhouette_coefficient[9:18])}')
+  print(f'average: {max(silhouette_coefficient[18:27])}, {len(silhouette_coefficient[18:27])}')
+  print(f'minimum: {max(silhouette_coefficient[27:36])}, {len(silhouette_coefficient[27:36])}')
+
+# agglomerative_cluster(dataset=df)
+
+
+dendogram = shc.dendrogram(shc.linkage(df, method='single'), p=20, 
+                           truncate_mode='lastp')
 plt.clf()
 
-plt.figure(figsize=(12, 10))
-sns.scatterplot(new_df.Mcz, new_df.ApDRmag, label='Galaxy Size')
-sns.scatterplot(new_df.Mcz, new_df.chi2red, alpha=0.5, label='chi2red')
-plt.clf()
-# chi2red > 5 is an outlier
-# galaxy size below -2.5 is an outlier
+#------------------------------------------------
 
-df = df[new_df.chi2red<5]
-df = df[new_df.ApDRmag>-2.5]
+def inertia_kmeans(data):
+    inertia = []
+    for i in range (1, 11):
+        kmeans = KMeans(n_clusters=i, init='k-means++', n_init=100, max_iter=1000,
+                        random_state=1)
+        kmeans.fit(data)
+        inertia.append(kmeans.inertia_)
+    # print(inertia)
+    return inertia
 
-plt.figure(figsize=(12, 10))
-sns.scatterplot(df.chi2red, df.ApDRmag, label='Galaxy Size')
-sns.scatterplot(df.chi2red, df.mumax, alpha=0.5, label='Center of Galaxy')
-plt.clf()
+inertia = inertia_kmeans(df)
 
-df = df[df.mumax>=20]
-df = df[df.BjMAG<0]
-
-plt.figure(figsize=(12, 10))
-ax = sns.scatterplot(df.Mcz, df.BjMAG, label='Blue', alpha=0.5)
-ax = sns.scatterplot(df.Mcz, df.rsMAG, label='Red', alpha=0.5)
-plt.legend()
-ax.invert_yaxis()
+plt.plot(range(1, 11), inertia)
+plt.xticks(range(1, 11))
+plt.xlabel('Number of clusters')
+plt.ylabel('Inertia')
 plt.clf()
 
+#-----------------------------------------------
+# testing the silhouette score for different number of clusters
 
-df = df[df.Mcz<0.8]
-df = df[df.Mcz>0.7]
+def sil_kmeans(data):
+    sil_coef = []
+    for i in range(2, 11):
+        kmeans = KMeans(n_clusters=i, init='k-means++', n_init=100, max_iter=1000,
+                        random_state=1)
+        kmeans.fit(data)
+        score = silhouette_score(data, kmeans.labels_)
+        sil_coef.append(score)
+    return sil_coef
 
-plt.figure(figsize=(12, 10))
-ax = sns.scatterplot(df.BbMAG, (df.UbMAG-df.BbMAG))
-plt.title('Blue Mag vs Ultra-Blue')
+sil_kmeans = sil_kmeans(df)
+
+plt.plot(range(2, 11), sil_kmeans[:9])
+plt.xlabel('Number of clusters')
+plt.ylabel('Silhouette Score')
 plt.clf()
 
-# reduce the dimensionality of the data
+#-----------------------------------------------------
+# Using DBSCAN to test the silhouette score for different 
+# distances and number of clusters
 
-from sklearn.decomposition import PCA
+def sil_dbscan(data):
+    sil_coef_db = []
+    for radius in (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2):
+        for n in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]:
+            dbscan = DBSCAN(eps=radius, min_samples=n)
+            dbscan.fit(data)
+            score = silhouette_score(data, dbscan.labels_)
+            sil_coef_db.append(score)
+    
+    print(f'radius-0.4: {max(sil_coef_db[:9])}')
+    print(f'radius-0.5: {max(sil_coef_db[9:18])}')
+    print(f'radius-0.6: {max(sil_coef_db[18:27])}')
+    print(f'radius-0.7: {max(sil_coef_db[27:36])}')
+    print(f'radius-0.8: {max(sil_coef_db[36:45])}')
+    print(f'radius-0.9: {max(sil_coef_db[45:54])}')
 
-pca = PCA(n_components=2)
-pca.fit(df)
 
-print("Explained variance ratio: ")
-print(pca.explained_variance_ratio_)
+sil_dbscan = sil_dbscan(df)
 
-print('PCA components: ')
-print(pca.components_)
+# We find that 0.9 is the best radius
+# Now we get the coefficient scores for different number of samples within 
+# this radius
 
+sil_dbscan_coef = []
+for n in range (2, 15):
+    dbscan = DBSCAN(eps=0.9, min_samples=n)
+    dbscan.fit(df)
+    score = silhouette_score(df, dbscan.labels_)
+    sil_dbscan_coef.append(score)
 
-df_pca = pca.transform(df)
-
-# test the bimodality here
-
-# df_bi = pd.DataFrame().assign(blue=df['BbMAG'], ultramb=(df['UbMAG']-df['BbMAG']))
-
-# from sklearn.cluster import SpectralClustering
-
-# # sc = SpectralClustering(n_clusters=2, affinity='nearest_neighbors', 
-# #                         assign_labels='kmeans', n_init=100)
-# # label = sc.fit_predict(df_bi)
-
-plt.scatter(df_pca[:,0], df_pca[:,1], s=15, linewidth=0)
-plt.xlabel('PCA 1')
-plt.ylabel('PCA 2')
+plt.plot(range(2, 15), sil_dbscan_coef)
+plt.xlabel('Number of samples')
+plt.ylabel('Silhouette Score')
 plt.show()
 
-# from sklearn import metrics
-
-# # print(f"Silhouette Coefficient: {metrics.silhouette_score(df_bi, label):.3f}")
-
-# from sklearn.cluster import KMeans
-
-# km = KMeans(n_clusters=2, init='random', max_iter=1000)
-# label = km.fit_predict(df_bi)
-
-# plt.scatter(df_bi['blue'], df_bi['ultramb'], s=15, linewidth=0, c=label)
-# plt.show()
-
-# print(f"Silhouette Coefficient: {metrics.silhouette_score(df_bi, label):.3f}")
+# That gives us eps = 1.0 and min_samples=13 ?
+#-------------------------------------------------------

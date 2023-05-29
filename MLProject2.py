@@ -138,7 +138,7 @@ def sil_dbscan(data):
     print(f'radius-0.9: {max(sil_coef_db[45:54])}')
 
 
-sil_dbscan = sil_dbscan(df)
+# sil_dbscan = sil_dbscan(df)
 
 # We find that 0.9 is the best radius
 # Now we get the coefficient scores for different number of samples within 
@@ -154,7 +154,74 @@ for n in range (2, 15):
 plt.plot(range(2, 15), sil_dbscan_coef)
 plt.xlabel('Number of samples')
 plt.ylabel('Silhouette Score')
-plt.show()
+plt.clf()
 
-# That gives us eps = 1.0 and min_samples=13 ?
+# That gives us eps = 0.9 and min_samples=11 ?
 #-------------------------------------------------------
+# Now let's test how the sample gets distributed by different methods
+
+agg_df = AgglomerativeClustering(n_clusters=2, linkage='single', affinity='euclidean')
+agg_df.fit_predict(df)
+
+df['agglomerative_label'] = agg_df.labels_
+
+
+kmean_df = KMeans(n_clusters=2, init='k-means++', n_init=100, max_iter=1000, 
+                  random_state=1)
+kmean_df.fit_predict(df)
+
+df['kmeans_label'] = kmean_df.labels_
+
+
+dbsc_df = DBSCAN(eps=0.9, min_samples=11)
+dbsc_df.fit_predict(df)
+
+df['dbscan_label'] = dbsc_df.labels_
+
+# Now counting for each
+
+# print(df['agglomerative_label'].value_counts())
+# print(df['kmeans_label'].value_counts())
+# print(df['dbscan_label'].value_counts())
+
+# KMeans and DBSCAN were able to divid well both groups at basically the same
+# ratio.. 1954/1378 for KMeans and 1949/1372 for DBSCAN
+
+# We will use a 3-dimensional visualization to separate the bluer galaxies from
+# the red ones.
+
+# For KMeans:
+
+blue = df[df['kmeans_label'] == 0]
+red = df[df['kmeans_label'] == 1]
+
+fig = plt.figure(figsize=(20, 15))
+ax = plt.axes(projection='3d')
+
+ax.scatter3D(blue['Rmag'], blue['ApDRmag'], blue['Mcz'], color='blue', 
+             label='Bluer galaxies')
+ax.scatter3D(red['Rmag'], red['ApDRmag'], red['Mcz'], color='red', 
+             label='Redder galaxies')
+
+ax.legend()
+plt.clf()
+
+#For DBSCAN:
+
+blue = df[df['dbscan_label'] == 0]
+red = df[df['dbscan_label'] == 1]
+
+fig = plt.figure(figsize=(15, 15))
+ax = plt.axes(projection='3d')
+
+ax.scatter3D(blue['Rmag'], blue['ApDRmag'], blue['Mcz'], color='blue', 
+             label='Bluer galaxies', alpha=0.5)
+ax.scatter3D(red['Rmag'], red['ApDRmag'], red['Mcz'], color='red', 
+             label='Redder galaxies', alpha=0.5)
+
+ax.set_xlabel('Rmag')
+ax.set_ylabel('ApDRmag')
+ax.set_zlabel('Mcz')
+# ax.view_init(270, 90)
+ax.legend()
+plt.clf()
